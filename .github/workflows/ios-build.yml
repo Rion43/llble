@@ -15,16 +15,15 @@ jobs:
         with:
           xcode-version: "16.4"
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: 22
 
-      - name: Install dependencies
+      - name: Install Expo & dependencies
         run: |
           npm install -g expo
-          npm ci
+          npm install
 
       - name: Expo prebuild
         run: |
@@ -33,46 +32,50 @@ jobs:
       - name: Patch Podfile
         run: |
           cd ios
-          if ! grep -q "pod 'fmt'" Podfile; then
-            ruby -e '
-              txt = File.read("Podfile")
-              txt.sub!(
-                "post_install do |installer|",
-                "pod '\''fmt'\'', '\''10.1.1'\''\n\npost_install do |installer|"
-              )
-              File.write("Podfile", txt)
-            '
-          fi
+          ruby - <<'RUBY'
+          podfile = File.read("Podfile")
 
-      - name: Install Pods
+          unless podfile.include?("pod 'fmt'")
+            podfile.sub!(
+              "post_install do |installer|",
+              "pod 'fmt', '10.1.1'\n\npost_install do |installer|"
+            )
+          end
+
+          File.write("Podfile", podfile)
+          RUBY
+
+      - name: Install CocoaPods
         run: |
           cd ios
-          pod install
+          pod install --repo-update
 
-      - name: Read App Name
+      - name: Read app name
         run: |
           echo "APP_NAME=$(jq -r .name package.json)" >> $GITHUB_ENV
 
       - name: Build Archive
         run: |
           xcodebuild \
-          -workspace ios/${APP_NAME}.xcworkspace \
-          -scheme ${APP_NAME} \
-          -configuration Debug \
-          -sdk iphoneos \
-          -archivePath build/${APP_NAME}.xcarchive \
-          archive \
-          CODE_SIGNING_ALLOWED=NO \
-          CODE_SIGNING_REQUIRED=NO \
-          CODE_SIGN_IDENTITY=""
+            -workspace ios/${APP_NAME}.xcworkspace \
+            -scheme ${APP_NAME} \
+            -configuration Debug \
+            -sdk iphoneos \
+            archive \
+            -archivePath build/${APP_NAME}.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
 
       - name: Export IPA
         run: |
           mkdir Payload
           cp -R build/${APP_NAME}.xcarchive/Products/Applications/${APP_NAME}.app Payload/
           zip -r ${APP_NAME}.ipa Payload
+          mv ${APP_NAME}.ipa .
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
         with:
           name: ipa
-          path: ${{ env.APP_NAME }}.ipa
+          path: "*.ipa"
