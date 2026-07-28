@@ -23,11 +23,34 @@ jobs:
           npm install -g expo
           npm install
 
-      - name: Prebuild and Install CocoaPods
+      - name: Expo prebuild
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Patch Podfile (local ReactAppDependencyProvider)
         run: |
-          npx expo prebuild --platform ios --clean
           cd ios
-          pod install
+          if ! grep -q "ReactAppDependencyProvider" Podfile; then
+            ruby -e '
+              lines = File.readlines("Podfile")
+              lines.reject! { |l| l.include?("ReactAppDependencyProvider") }
+              idx = lines.index { |l| l.strip.start_with?("post_install") }
+              if idx
+                lines.insert(idx, "  pod \"ReactAppDependencyProvider\", :path => \"../.\"\n")
+              else
+                last_end = lines.rindex { |l| l.strip == "end" }
+                lines.insert(last_end, "  pod \"ReactAppDependencyProvider\", :path => \"../.\"\n")
+              end
+              File.write("Podfile", lines.join)
+            '
+            echo "✓ Podfile patched"
+          else
+            echo "✓ Already patched or not needed"
+          fi
+
+      - name: CocoaPods install
+        run: |
+          cd ios
+          pod install --repo-update
 
       - name: Read app name from package.json
         id: appname
