@@ -151,7 +151,7 @@ jobs:
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
           echo "Certificate and provisioning profile installed"
 
-            - name: Build IPA
+      - name: Build IPA
         env:
           BUILD_ID: ${{ inputs.build_id }}
           IOS_PATH: ${{ inputs.ios_path }}
