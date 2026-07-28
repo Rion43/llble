@@ -8,51 +8,42 @@ jobs:
     runs-on: macos-15
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: "16.4"
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
-      - name: Install Expo & dependencies
+      - name: Install dependencies
         run: |
           npm install -g expo
           npm install
 
-      - name: Expo prebuild
+      - name: Install CocoaPods
+        run: |
+          sudo gem install cocoapods
+
+      - name: Generate iOS project
         run: |
           npx expo prebuild --platform ios --clean
 
-      - name: Patch Podfile
+      - name: Install Pods
         run: |
           cd ios
-          ruby - <<'RUBY'
-          podfile = File.read("Podfile")
+          rm -rf Pods Podfile.lock
+          pod repo update
+          pod install
 
-          unless podfile.include?("pod 'fmt'")
-            podfile.sub!(
-              "post_install do |installer|",
-              "pod 'fmt', '10.1.1'\n\npost_install do |installer|"
-            )
-          end
-
-          File.write("Podfile", podfile)
-          RUBY
-
-      - name: Install CocoaPods
+      - name: Read App Name
         run: |
-          cd ios
-          pod install --repo-update
-
-      - name: Read app name
-        run: |
-          echo "APP_NAME=$(jq -r .name package.json)" >> $GITHUB_ENV
+          echo "APP_NAME=$(node -p "require('./package.json').name")" >> $GITHUB_ENV
 
       - name: Build Archive
         run: |
@@ -61,8 +52,8 @@ jobs:
             -scheme ${APP_NAME} \
             -configuration Debug \
             -sdk iphoneos \
-            archive \
             -archivePath build/${APP_NAME}.xcarchive \
+            archive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
@@ -71,8 +62,9 @@ jobs:
         run: |
           mkdir Payload
           cp -R build/${APP_NAME}.xcarchive/Products/Applications/${APP_NAME}.app Payload/
-          zip -r ${APP_NAME}.ipa Payload
-          mv ${APP_NAME}.ipa .
+          cd Payload
+          zip -r ../${APP_NAME}.ipa .
+          cd ..
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
