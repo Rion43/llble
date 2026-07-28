@@ -1,0 +1,18 @@
+{
+  "project": "llble",
+  "platform": "ios",
+  "github": {
+    "owner": "Rion43",
+    "repo": "llble"
+  },
+  "ios": {
+    "path": "C:\\Users\\PC1\\Desktop\\llblet\\builder.exe ios build"
+  },
+  "flutter": {
+    "watch": {}
+  },
+  "reactNative": {
+    "expo": true
+  },
+  "mobai": {}
+}
