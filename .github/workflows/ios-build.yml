@@ -5,82 +5,74 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-15
+
     steps:
       - uses: actions/checkout@v4
 
-      - uses: maxim-lobanov/setup-xcode@v1
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '26.5'
+          xcode-version: "16.4"
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
+          cache: npm
 
-      - name: Install Expo & dependencies
+      - name: Install dependencies
         run: |
           npm install -g expo
-          npm install
+          npm ci
 
       - name: Expo prebuild
-        run: npx expo prebuild --platform ios --clean
+        run: |
+          npx expo prebuild --platform ios --clean
 
-      - name: Patch Podfile (local ReactAppDependencyProvider)
+      - name: Patch Podfile
         run: |
           cd ios
-          if ! grep -q "ReactAppDependencyProvider" Podfile; then
+          if ! grep -q "pod 'fmt'" Podfile; then
             ruby -e '
-              lines = File.readlines("Podfile")
-              lines.reject! { |l| l.include?("ReactAppDependencyProvider") }
-              idx = lines.index { |l| l.strip.start_with?("post_install") }
-              if idx
-                lines.insert(idx, "  pod \"ReactAppDependencyProvider\", :path => \"../.\"\n")
-              else
-                last_end = lines.rindex { |l| l.strip == "end" }
-                lines.insert(last_end, "  pod \"ReactAppDependencyProvider\", :path => \"../.\"\n")
-              end
-              File.write("Podfile", lines.join)
+              txt = File.read("Podfile")
+              txt.sub!(
+                "post_install do |installer|",
+                "pod '\''fmt'\'', '\''10.1.1'\''\n\npost_install do |installer|"
+              )
+              File.write("Podfile", txt)
             '
-            echo "✓ Podfile patched"
-          else
-            echo "✓ Already patched or not needed"
           fi
 
-      - name: CocoaPods install
+      - name: Install Pods
         run: |
           cd ios
-          pod install --repo-update
+          pod install
 
-      - name: Read app name from package.json
-        id: appname
+      - name: Read App Name
         run: |
-          RAW_NAME=$(jq -r .name package.json)
-          SAFE_NAME=$(echo $RAW_NAME | tr -cd '[:alnum:]_')
-          echo "APP_NAME=$SAFE_NAME" >> $GITHUB_ENV
+          echo "APP_NAME=$(jq -r .name package.json)" >> $GITHUB_ENV
 
-      - name: Build iOS archive (unsigned)
+      - name: Build Archive
         run: |
           xcodebuild \
-            -workspace ios/${{ env.APP_NAME }}.xcworkspace \
-            -scheme ${{ env.APP_NAME }} \
-            -configuration Debug clean archive \
-            -sdk iphoneos \
-            -archivePath build/${{ env.APP_NAME }}.xcarchive \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
+          -workspace ios/${APP_NAME}.xcworkspace \
+          -scheme ${APP_NAME} \
+          -configuration Debug \
+          -sdk iphoneos \
+          -archivePath build/${APP_NAME}.xcarchive \
+          archive \
+          CODE_SIGNING_ALLOWED=NO \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGN_IDENTITY=""
 
       - name: Export IPA
         run: |
-          cd build/${{ env.APP_NAME }}.xcarchive/Products/Applications
-          mkdir -p Payload
-          cp -r ${{ env.APP_NAME }}.app Payload/
-          zip -r ${{ env.APP_NAME }}.ipa Payload
-          mv ${{ env.APP_NAME }}.ipa $GITHUB_WORKSPACE/
+          mkdir Payload
+          cp -R build/${APP_NAME}.xcarchive/Products/Applications/${APP_NAME}.app Payload/
+          zip -r ${APP_NAME}.ipa Payload
 
-      - name: Upload .ipa
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-ipa
+          name: ipa
           path: ${{ env.APP_NAME }}.ipa
