@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "llosa",
+    "slug": "llosa",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "plugins": [
+      "react-native-ble-plx"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.llosa.bletest",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "BLE test",
+        "NSBluetoothPeripheralUsageDescription": "BLE test"
+      },
+      "supportsTablet": false
+    }
+  }
+}
